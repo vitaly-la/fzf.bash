@@ -1,14 +1,6 @@
-#!/usr/bin/env -S bash -i
+if [[ $- =~ i ]]; then
 
-ctrl_c() {
-    rm -f "$unique" "$filtered"
-    echo
-    history -c
-    exit
-}
-
-main() {
-    hst="$HOME/.bash_history"
+__fzf_history__() {
     unique="$(mktemp)"
     filtered="$(mktemp)"
     input=''
@@ -17,31 +9,29 @@ main() {
     offset=0
     line=1
 
-    tac "$hst" | awk '!seen[$0]++' | tac > "$unique"
+    fc -lnr -2147483648 | awk '!seen[$0]++' | tac > "$unique"
 
-    trap ctrl_c INT
-
-    while true ; do
+    while true; do
         grep "$pattern" "$unique" > "$filtered"
         lines="$(wc -l < "$filtered")"
         shown="$(head -n -"$offset" "$filtered" | tail -n "$total")"
         shown_lines="$(echo "$shown" | wc -l)"
-        select="$(echo "$shown" | tail -n "$line" | head -n 1)"
+        output="$(echo "$shown" | tail -n "$line" | head -n 1)"
 
         clear
-        echo "$shown" | head -n "$(( shown_lines - line ))" | awk '{ print "  "$0 }'
-        echo "> $select"
-        echo "$shown" | tail -n "$(( line - 1 ))" | awk '{ print "  "$0 }'
+        echo "$shown" | head -n "$(( shown_lines - line ))"
+        echo ">$output"
+        echo "$shown" | tail -n "$(( line - 1 ))"
         echo '--------------------------------------------------------------------------------'
         echo -n "> $input"
 
         IFS= read -rsn1 chr
 
-        if [[ -z "$chr" ]] ; then
+        if [[ -z "$chr" ]]; then
             break
 
-        elif [[ "$chr" == $'\x08' || "$chr" == $'\x7f' ]] ; then
-            if [[ -n "$input" ]] ; then
+        elif [[ "$chr" == $'\x08' || "$chr" == $'\x7f' ]]; then
+            if [[ -n "$input" ]]; then
                 input="${input::-1}"
                 pattern="${pattern:0:-3}"
                 offset=0
@@ -51,21 +41,21 @@ main() {
         elif [[ "$chr" == $'\e' ]]; then
             IFS= read -rsn2 chr
 
-            if [[ "$chr" == '[A' ]] ; then
-                if (( line < shown_lines )) ; then
+            if [[ "$chr" == '[A' ]]; then
+                if (( line < shown_lines )); then
                     line="$(( line + 1 ))"
-                elif (( offset < lines - shown_lines )) ; then
+                elif (( offset < lines - shown_lines )); then
                     offset="$(( offset + 1 ))"
                 fi
-            elif [[ "$chr" == '[B' ]] ; then
-                if (( line > 1 )) ; then
+            elif [[ "$chr" == '[B' ]]; then
+                if (( line > 1 )); then
                     line="$(( line - 1 ))"
-                elif (( offset > 0 )) ; then
+                elif (( offset > 0 )); then
                     offset="$(( offset - 1 ))"
                 fi
             fi
 
-        elif [[ "$chr" =~ [[:print:]] ]] ; then
+        elif [[ "$chr" =~ [[:print:]] ]]; then
             input="$input$chr"
             pattern="$pattern$chr.*"
             offset=0
@@ -75,12 +65,25 @@ main() {
 
     rm -f "$unique" "$filtered"
     echo
-    echo "${PS1@P}$select"
-    if [[ "$select" != "$(tail -n 1 "$HISTFILE")" ]] ; then
-        echo "$select" >> "$HISTFILE"
+
+    READLINE_LINE=${output#*$'\t '}
+    if [[ -z "$READLINE_POINT" ]]; then
+        echo "$READLINE_LINE"
+    else
+        READLINE_POINT=0x7fffffff
     fi
-    history -c
-    eval "$select"
 }
 
-main
+bind -m emacs-standard '"\er": redraw-current-line'
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    bind -m emacs-standard '"\C-r": "\C-e \C-u\C-y\ey\C-u`__fzf_history__`\e\C-e\er"'
+    bind -m vi-command '"\C-r": "\C-z\C-r\C-z"'
+    bind -m vi-insert '"\C-r": "\C-z\C-r\C-z"'
+else
+    bind -m emacs-standard -x '"\C-r": __fzf_history__'
+    bind -m vi-command -x '"\C-r": __fzf_history__'
+    bind -m vi-insert -x '"\C-r": __fzf_history__'
+fi
+
+fi
