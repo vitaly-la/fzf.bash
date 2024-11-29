@@ -9,7 +9,7 @@ __fzf_history__() {
     offset=0
     line=1
 
-    fc -lnr -2147483648 | awk '!seen[$0]++' | tac > "$unique"
+    fc -lr -2147483648 | awk '{ key=substr($0, index($0, $2)); if (!seen[key]++) print }' | tac > "$unique"
 
     while true; do
         grep "$pattern" "$unique" > "$filtered"
@@ -19,9 +19,9 @@ __fzf_history__() {
         output="$(echo "$shown" | tail -n "$line" | head -n 1)"
 
         clear
-        echo "$shown" | head -n "$(( shown_lines - line ))"
-        echo ">$output"
-        echo "$shown" | tail -n "$(( line - 1 ))"
+        echo "$shown" | head -n "$(( shown_lines - line ))" | awk '{ print "  "$0 }'
+        echo "> $output"
+        echo "$shown" | tail -n "$(( line - 1 ))" | awk '{ print "  "$0 }'
         echo '--------------------------------------------------------------------------------'
         echo -n "> $input"
 
@@ -75,6 +75,10 @@ __fzf_history__() {
 }
 
 bind -m emacs-standard '"\er": redraw-current-line'
+
+bind -m vi-command '"\C-z": emacs-editing-mode'
+bind -m vi-insert '"\C-z": emacs-editing-mode'
+bind -m emacs-standard '"\C-z": vi-editing-mode'
 
 if (( BASH_VERSINFO[0] < 4 )); then
     bind -m emacs-standard '"\C-r": "\C-e \C-u\C-y\ey\C-u`__fzf_history__`\e\C-e\er"'
